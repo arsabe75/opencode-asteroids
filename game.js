@@ -116,7 +116,78 @@ class Asteroid {
     ctx.stroke();
     ctx.restore();
   }
+}
+
+// ── Estrella fugaz ────────────────────────────────────────────────────────────
+class EstrellaFugaz extends Asteroid {
+  constructor(x, y) {
+    super(x, y, 1);
+    this.isStar = true;
+    this.points = 150;
+    this.maxTtl = 6;
+    this.ttl = this.maxTtl;
+    this.radius = 14;
+
+    const angle = rand(0, Math.PI * 2);
+    const speed = rand(200, 240);
+    this.vx = Math.cos(angle) * speed;
+    this.vy = Math.sin(angle) * speed;
+    this.rotSpeed = rand(-2.5, 2.5);
+
+    // Polígono de estrella de 5 puntas
+    const n = 5;
+    this.verts = [];
+    for (let i = 0; i < n * 2; i++) {
+      const a = (i / (n * 2)) * Math.PI * 2 - Math.PI / 2;
+      const r = i % 2 === 0 ? this.radius : this.radius * 0.45;
+      this.verts.push([Math.cos(a) * r, Math.sin(a) * r]);
+    }
   }
+
+  update(dt) {
+    super.update(dt);
+    this.ttl -= dt;
+    if (this.ttl <= 0) this.dead = true;
+  }
+
+  split() {
+    return [];
+  }
+
+  draw() {
+    const blink = this.ttl < 2 ? Math.floor(this.ttl * 6) % 2 === 0 : true;
+    if (!blink) return;
+
+    const alpha = this.ttl < 2 ? (this.ttl / 2) : 1;
+    ctx.save();
+    ctx.translate(this.x, this.y);
+    ctx.rotate(this.rot);
+
+    // Estela
+    const speed = Math.hypot(this.vx, this.vy);
+    const tx = -(this.vx / speed) * 28;
+    const ty = -(this.vy / speed) * 28;
+    ctx.strokeStyle = `rgba(255, 215, 94, ${(alpha * 0.5).toFixed(2)})`;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(0, 0);
+    ctx.lineTo(tx * 0.6, ty * 0.6);
+    ctx.stroke();
+
+    // Estrella
+    ctx.strokeStyle = `rgba(255, 215, 94, ${alpha.toFixed(2)})`;
+    ctx.lineWidth = 2;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    ctx.moveTo(this.verts[0][0], this.verts[0][1]);
+    for (let i = 1; i < this.verts.length; i++)
+      ctx.lineTo(this.verts[i][0], this.verts[i][1]);
+    ctx.closePath();
+    ctx.stroke();
+
+    ctx.restore();
+  }
+}
 
 // ── Power-up ──────────────────────────────────────────────────────────────────
 const POWERUP_DROP_CHANCE = 0.12;
@@ -300,6 +371,7 @@ let ship, bullets, asteroids, particles, powerups;
 let score, lives, level;
 let state;      // 'playing' | 'dead' | 'gameover'
 let deadTimer;
+let estrellaTimer;
 
 function spawnAsteroids(count) {
   const SAFE_DIST = 130;
@@ -313,6 +385,16 @@ function spawnAsteroids(count) {
   }
 }
 
+function spawnEstrellaFugaz() {
+  const SAFE_DIST = 130;
+  let x, y;
+  do {
+    x = rand(0, W);
+    y = rand(0, H);
+  } while (Math.hypot(x - ship.x, y - ship.y) < SAFE_DIST);
+  asteroids.push(new EstrellaFugaz(x, y));
+}
+
 function initGame() {
   ship          = new Ship();
   bullets   = [];
@@ -323,6 +405,7 @@ function initGame() {
   lives  = 3;
   level  = 1;
   state  = 'playing';
+  estrellaTimer = rand(4, 8);
   spawnAsteroids(4);
 }
 
@@ -332,6 +415,8 @@ function nextLevel() {
   particles = [];
   powerups  = [];
   ship.reset();
+  estrellaTimer = rand(4, 8);
+  spawnAsteroids(Math.min(3 + level, 8));
 }
 
 function explode(x, y, count = 8) {
@@ -385,6 +470,13 @@ function update(dt) {
   particles = particles.filter(p => !p.dead);
   powerups  = powerups.filter(p => !p.dead);
 
+  // Spawn de estrella fugaz
+  estrellaTimer -= dt;
+  if (estrellaTimer <= 0) {
+    spawnEstrellaFugaz();
+    estrellaTimer = rand(7, 12);
+  }
+
   // Bala vs asteroide
   const newAsteroids = [];
   for (const b of bullets) {
@@ -392,7 +484,7 @@ function update(dt) {
       if (!a.dead && !b.dead && dist(b, a) < a.radius) {
         b.dead = true;
         a.dead = true;
-        score += POINTS[a.size];
+        score += a.points ?? POINTS[a.size];
         explode(a.x, a.y, a.size * 5);
         if (Math.random() < POWERUP_DROP_CHANCE && powerups.length < 2) {
           powerups.push(new PowerUp(a.x, a.y));
@@ -424,7 +516,7 @@ function update(dt) {
   }
 
   // Nivel completado
-  if (asteroids.length === 0) nextLevel();
+  if (asteroids.filter(a => !(a instanceof EstrellaFugaz)).length === 0) nextLevel();
 }
 
 // ── Draw ──────────────────────────────────────────────────────────────────────
