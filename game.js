@@ -29,6 +29,91 @@ const dist  = (a, b)   => Math.hypot(a.x - b.x, a.y - b.y);
 const rand  = (min, max) => min + Math.random() * (max - min);
 const randInt = (min, max) => Math.floor(rand(min, max + 1));
 
+// ── Skins ─────────────────────────────────────────────────────────────────────
+const SKINS = [
+  {
+    id: 'clasica',
+    nombre: 'CLASICA',
+    color: '#fff',
+    llama: 'rgba(255, 130, 0, 0.85)',
+    escape: [-7, 0],
+    puntos: [[20, 0], [-12, -9], [-7, 0], [-12, 9]],
+  },
+  {
+    id: 'neon',
+    nombre: 'NEON',
+    color: '#39ff14',
+    llama: 'rgba(57, 255, 20, 0.85)',
+    escape: [-8, 0],
+    puntos: [[22, 0], [-14, -6], [-8, 0], [-14, 6]],
+  },
+  {
+    id: 'fantasma',
+    nombre: 'FANTASMA',
+    color: 'rgba(180, 220, 255, 0.55)',
+    llama: 'rgba(120, 200, 255, 0.75)',
+    escape: [-7, 0],
+    puntos: [[20, 0], [-14, -10], [-7, 0], [-14, 10]],
+  },
+  {
+    id: 'caza',
+    nombre: 'CAZA',
+    color: '#ff5e5e',
+    llama: 'rgba(255, 220, 80, 0.9)',
+    escape: [-12, 0],
+    puntos: [[20, 0], [-10, -11], [-4, -6], [-12, 0], [-4, 6], [-10, 11]],
+    extra: [[[8, 0], [-2, 0]]],
+  },
+  {
+    id: 'dorada',
+    nombre: 'DORADA',
+    color: '#ffd700',
+    llama: 'rgba(255, 200, 60, 0.9)',
+    escape: [-6, 0],
+    puntos: [[21, 0], [-11, -8], [-6, 0], [-11, 8]],
+    extra: [[[13, 0], [-3, 0]]],
+  },
+];
+
+function loadSkinIndex() {
+  try {
+    const saved = localStorage.getItem('asteroids-skin');
+    if (saved !== null) {
+      const idx = parseInt(saved, 10);
+      if (!isNaN(idx) && idx >= 0 && idx < SKINS.length) return idx;
+    }
+  } catch (e) { /* localStorage puede no estar disponible */ }
+  return 0;
+}
+
+function setSkinIndex(idx) {
+  skinIndex = ((idx % SKINS.length) + SKINS.length) % SKINS.length;
+  try {
+    localStorage.setItem('asteroids-skin', String(skinIndex));
+  } catch (e) {}
+}
+
+function currentSkin() {
+  return SKINS[skinIndex];
+}
+
+function traceShipPath(ctx, puntos, scale = 1) {
+  ctx.beginPath();
+  ctx.moveTo(puntos[0][0] * scale, puntos[0][1] * scale);
+  for (let i = 1; i < puntos.length; i++)
+    ctx.lineTo(puntos[i][0] * scale, puntos[i][1] * scale);
+  ctx.closePath();
+}
+
+function drawSkinExtras(ctx, skin, scale = 1) {
+  if (!skin.extra) return;
+  ctx.beginPath();
+  for (const line of skin.extra) {
+    ctx.moveTo(line[0][0] * scale, line[0][1] * scale);
+    ctx.lineTo(line[1][0] * scale, line[1][1] * scale);
+  }
+}
+
 // ── Bullet ────────────────────────────────────────────────────────────────────
 class Bullet {
   constructor(x, y, angle) {
@@ -302,31 +387,32 @@ class Ship {
     // Parpadeo durante invencibilidad de reaparición
     if (this.invincible > 0 && Math.floor(this.invincible * 8) % 2 === 0) return;
 
+    const skin = currentSkin();
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    ctx.strokeStyle = this.speedBoost > 0 ? '#0ff' : '#fff';
+    ctx.strokeStyle = this.speedBoost > 0 ? '#0ff' : skin.color;
     ctx.lineWidth   = 1.5;
     ctx.lineJoin    = 'round';
 
-    // Silueta clásica: triángulo con muesca trasera
-    ctx.beginPath();
-    ctx.moveTo( 20,  0);   // nariz
-    ctx.lineTo(-12, -9);   // ala izquierda
-    ctx.lineTo( -7,  0);   // muesca trasera
-    ctx.lineTo(-12,  9);   // ala derecha
-    ctx.closePath();
+    // Silueta de la skin actual
+    traceShipPath(ctx, skin.puntos);
+    ctx.stroke();
+
+    // Detalles adicionales (líneas decorativas)
+    drawSkinExtras(ctx, skin);
     ctx.stroke();
 
     // Llama del propulsor
     if (this.thrusting && Math.random() > 0.35) {
+      const [ex, ey] = skin.escape;
       ctx.beginPath();
-      ctx.moveTo(-8, -4);
+      ctx.moveTo(ex, ey - 4);
       const flameMin = this.speedBoost > 0 ? 12 : 6;
       const flameMax = this.speedBoost > 0 ? 22 : 14;
-      ctx.lineTo(-8 - rand(flameMin, flameMax), 0);
-      ctx.lineTo(-8,  4);
-      ctx.strokeStyle = this.speedBoost > 0 ? 'rgba(0, 255, 255, 0.85)' : 'rgba(255, 130, 0, 0.85)';
+      ctx.lineTo(ex - rand(flameMin, flameMax), ey);
+      ctx.lineTo(ex, ey + 4);
+      ctx.strokeStyle = this.speedBoost > 0 ? 'rgba(0, 255, 255, 0.85)' : skin.llama;
       ctx.stroke();
     }
 
@@ -369,9 +455,11 @@ class Particle {
 // ── Estado del juego ──────────────────────────────────────────────────────────
 let ship, bullets, asteroids, particles, powerups;
 let score, lives, level;
-let state;      // 'playing' | 'dead' | 'gameover'
+let state;      // 'menu' | 'playing' | 'dead' | 'gameover'
 let deadTimer;
 let estrellaTimer;
+let skinIndex;
+let menuTime;
 
 function spawnAsteroids(count) {
   const SAFE_DIST = 130;
@@ -409,6 +497,23 @@ function initGame() {
   spawnAsteroids(4);
 }
 
+function initMenu() {
+  ship = new Ship();
+  ship.invincible = 0;
+  bullets = [];
+  asteroids = [];
+  particles = [];
+  powerups = [];
+  score = 0;
+  lives = 3;
+  level = 1;
+  state = 'menu';
+  estrellaTimer = 9999;
+  skinIndex = loadSkinIndex();
+  menuTime = 0;
+  spawnAsteroids(6);
+}
+
 function nextLevel() {
   level++;
   bullets   = [];
@@ -437,6 +542,16 @@ function killShip() {
 
 // ── Update ────────────────────────────────────────────────────────────────────
 function update(dt) {
+  if (state === 'menu') {
+    menuTime += dt;
+    if (pressed('ArrowLeft'))  setSkinIndex(skinIndex - 1);
+    if (pressed('ArrowRight')) setSkinIndex(skinIndex + 1);
+    if (pressed('KeyK'))       setSkinIndex(skinIndex + 1);
+    if (pressed('Space')) { initGame(); return; }
+    asteroids.forEach(a => a.update(dt));
+    return;
+  }
+
   if (state === 'gameover') {
     if (pressed('Space')) initGame();
     particles.forEach(p => p.update(dt));
@@ -455,7 +570,8 @@ function update(dt) {
     return;
   }
 
-  // Disparar
+  // Cambiar skin y disparar
+  if (pressed('KeyK')) setSkinIndex(skinIndex + 1);
   if (pressed('Space')) {
     bullets.push(...ship.tryShoot());
   }
@@ -521,18 +637,16 @@ function update(dt) {
 
 // ── Draw ──────────────────────────────────────────────────────────────────────
 function drawLifeIcon(x, y) {
+  const skin = currentSkin();
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(-Math.PI / 2);
-  ctx.strokeStyle = '#fff';
+  ctx.strokeStyle = skin.color;
   ctx.lineWidth   = 1.2;
   ctx.lineJoin    = 'round';
-  ctx.beginPath();
-  ctx.moveTo( 9,  0);
-  ctx.lineTo(-6, -5);
-  ctx.lineTo(-3,  0);
-  ctx.lineTo(-6,  5);
-  ctx.closePath();
+  traceShipPath(ctx, skin.puntos, 0.55);
+  ctx.stroke();
+  drawSkinExtras(ctx, skin, 0.55);
   ctx.stroke();
   ctx.restore();
 }
@@ -568,15 +682,49 @@ function drawOverlay(title, sub) {
   ctx.fillText(sub, W / 2, H / 2 + 22);
 }
 
+function prepareMenuShip() {
+  ship.x = W / 2;
+  ship.y = H / 2 + 30;
+  ship.angle = -Math.PI / 2 + Math.sin(menuTime * 0.8) * 0.15;
+  ship.thrusting = Math.floor(menuTime * 12) % 4 !== 0;
+  ship.invincible = 0;
+  ship.speedBoost = 0;
+}
+
+function drawMenuOverlay() {
+  const skin = currentSkin();
+
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#fff';
+  ctx.font = 'bold 54px monospace';
+  ctx.fillText('ASTEROIDS', W / 2, H / 2 - 90);
+
+  ctx.font = 'bold 24px monospace';
+  ctx.fillStyle = skin.color;
+  ctx.fillText(skin.nombre, W / 2, H / 2 + 75);
+
+  ctx.fillStyle = 'rgba(255,255,255,0.6)';
+  ctx.font = '14px monospace';
+  ctx.fillText(`◀ ▶  CAMBIAR SKIN          K  EN PARTIDA`, W / 2, H / 2 + 100);
+  ctx.fillText(`ESPACIO  PARA JUGAR`, W / 2, H / 2 + 122);
+}
+
 function draw() {
   ctx.fillStyle = '#000';
   ctx.fillRect(0, 0, W, H);
+
+  if (state === 'menu') prepareMenuShip();
 
   particles.forEach(p => p.draw());
   asteroids.forEach(a => a.draw());
   bullets.forEach(b => b.draw());
   powerups.forEach(p => p.draw());
   ship.draw();
+
+  if (state === 'menu') {
+    drawMenuOverlay();
+    return;
+  }
 
   drawHUD();
 
@@ -595,5 +743,5 @@ function loop(ts) {
   requestAnimationFrame(loop);
 }
 
-initGame();
+initMenu();
 requestAnimationFrame(loop);
