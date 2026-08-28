@@ -44,3 +44,4 @@ Luego visita `http://localhost:3000`.
 - Asteroides se parten en fragmentos más pequeños al ser destruidos
 - Partículas de explosión al destruir asteroides
 - Power-up "Velocidad": al recogerlo, la nave se mueve el doble de rápido durante 5 segundos
+- Power-up "Escudo": al recogerlo, una burbuja protectora destruye los asteroides al contacto durante 5 segundos

@@ -213,9 +213,11 @@ class PowerUp {
     const blink = this.ttl < 2 ? Math.floor(this.ttl * 6) % 2 === 0 : true;
     if (!blink) return;
 
+    const color = this.type === 'escudo' ? '#5f8' : '#0ff';
+
     ctx.save();
     ctx.translate(this.x, this.y);
-    ctx.strokeStyle = '#0ff';
+    ctx.strokeStyle = color;
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
 
@@ -225,16 +227,26 @@ class PowerUp {
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Rayo
-    ctx.beginPath();
-    ctx.moveTo( 2, -8);
-    ctx.lineTo(-5,  1);
-    ctx.lineTo( 0,  1);
-    ctx.lineTo(-3,  8);
-    ctx.lineTo( 6, -1);
-    ctx.lineTo( 1, -1);
-    ctx.closePath();
-    ctx.stroke();
+    if (this.type === 'escudo') {
+      // Icono de escudo: dos arcos concéntricos
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * 0.45, Math.PI, 0);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc(0, 0, this.radius * 0.72, Math.PI * 1.15, -Math.PI * 0.15);
+      ctx.stroke();
+    } else {
+      // Rayo
+      ctx.beginPath();
+      ctx.moveTo( 2, -8);
+      ctx.lineTo(-5,  1);
+      ctx.lineTo( 0,  1);
+      ctx.lineTo(-3,  8);
+      ctx.lineTo( 6, -1);
+      ctx.lineTo( 1, -1);
+      ctx.closePath();
+      ctx.stroke();
+    }
 
     ctx.restore();
   }
@@ -255,6 +267,7 @@ class Ship {
     this.invincible    = 3;
     this.shootCooldown = 0;
     this.speedBoost    = 0;
+    this.shield        = 0;
     this.dead          = false;
   }
 
@@ -270,6 +283,10 @@ class Ship {
     if (this.speedBoost > 0) {
       this.speedBoost -= dt;
       if (this.speedBoost < 0) this.speedBoost = 0;
+    }
+    if (this.shield > 0) {
+      this.shield -= dt;
+      if (this.shield < 0) this.shield = 0;
     }
 
     if (keys['ArrowLeft'])  this.angle -= ROT * dt;
@@ -317,6 +334,24 @@ class Ship {
     ctx.lineTo(-12,  9);   // ala derecha
     ctx.closePath();
     ctx.stroke();
+
+    // Escudo
+    if (this.shield > 0) {
+      const blink = this.shield < 2 ? Math.floor(this.shield * 6) % 2 === 0 : true;
+      if (blink) {
+        const alpha = this.shield < 2 ? (this.shield / 2) : 1;
+        const r = 24 + Math.sin(Date.now() / 120) * 2;
+        ctx.strokeStyle = `rgba(85, 255, 136, ${(alpha * 0.85).toFixed(2)})`;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = `rgba(85, 255, 136, ${(alpha * 0.12).toFixed(2)})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, r, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
 
     // Llama del propulsor
     if (this.thrusting && Math.random() > 0.35) {
@@ -487,7 +522,8 @@ function update(dt) {
         score += a.points ?? POINTS[a.size];
         explode(a.x, a.y, a.size * 5);
         if (Math.random() < POWERUP_DROP_CHANCE && powerups.length < 2) {
-          powerups.push(new PowerUp(a.x, a.y));
+          const type = Math.random() < 0.5 ? 'escudo' : 'velocidad';
+          powerups.push(new PowerUp(a.x, a.y, type));
         }
         newAsteroids.push(...a.split());
       }
@@ -496,8 +532,18 @@ function update(dt) {
   asteroids = asteroids.filter(a => !a.dead).concat(newAsteroids);
   bullets   = bullets.filter(b => !b.dead);
 
+  // Escudo vs asteroide
+  if (ship.shield > 0) {
+    for (const a of asteroids) {
+      if (!a.dead && dist(ship, a) < ship.radius + 24 + a.radius * 0.82) {
+        a.dead = true;
+        explode(a.x, a.y, a.size * 5);
+      }
+    }
+  }
+
   // Nave vs asteroide
-  if (ship.invincible <= 0) {
+  if (ship.invincible <= 0 && ship.shield <= 0) {
     for (const a of asteroids) {
       if (dist(ship, a) < ship.radius + a.radius * 0.82) {
         killShip();
@@ -510,7 +556,11 @@ function update(dt) {
   for (const p of powerups) {
     if (!p.dead && dist(ship, p) < ship.radius + p.radius) {
       p.dead = true;
-      ship.speedBoost = 5;
+      if (p.type === 'escudo') {
+        ship.shield = 5;
+      } else {
+        ship.speedBoost = 5;
+      }
       explode(ship.x, ship.y, 6);
     }
   }
@@ -550,6 +600,12 @@ function drawHUD() {
   if (ship.speedBoost > 0) {
     ctx.fillStyle = '#0ff';
     ctx.fillText(`VELOCIDAD ${ship.speedBoost.toFixed(1)}s`, W / 2, 46);
+    ctx.fillStyle = '#fff';
+  }
+
+  if (ship.shield > 0) {
+    ctx.fillStyle = '#5f8';
+    ctx.fillText(`ESCUDO ${ship.shield.toFixed(1)}s`, W / 2, ship.speedBoost > 0 ? 66 : 46);
     ctx.fillStyle = '#fff';
   }
 
