@@ -215,7 +215,8 @@ class PowerUp {
 
     ctx.save();
     ctx.translate(this.x, this.y);
-    ctx.strokeStyle = '#0ff';
+    const isTriple = this.type === 'triple';
+    ctx.strokeStyle = isTriple ? '#f0f' : '#0ff';
     ctx.lineWidth = 2;
     ctx.lineJoin = 'round';
 
@@ -225,16 +226,26 @@ class PowerUp {
     ctx.arc(0, 0, r, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Rayo
-    ctx.beginPath();
-    ctx.moveTo( 2, -8);
-    ctx.lineTo(-5,  1);
-    ctx.lineTo( 0,  1);
-    ctx.lineTo(-3,  8);
-    ctx.lineTo( 6, -1);
-    ctx.lineTo( 1, -1);
-    ctx.closePath();
-    ctx.stroke();
+    if (isTriple) {
+      // Tres barras verticales (triple disparo)
+      for (const ox of [-4, 0, 4]) {
+        ctx.beginPath();
+        ctx.moveTo(ox, -7);
+        ctx.lineTo(ox,  7);
+        ctx.stroke();
+      }
+    } else {
+      // Rayo (velocidad)
+      ctx.beginPath();
+      ctx.moveTo( 2, -8);
+      ctx.lineTo(-5,  1);
+      ctx.lineTo( 0,  1);
+      ctx.lineTo(-3,  8);
+      ctx.lineTo( 6, -1);
+      ctx.lineTo( 1, -1);
+      ctx.closePath();
+      ctx.stroke();
+    }
 
     ctx.restore();
   }
@@ -255,6 +266,7 @@ class Ship {
     this.invincible    = 3;
     this.shootCooldown = 0;
     this.speedBoost    = 0;
+    this.tripleShot    = 0;
     this.dead          = false;
   }
 
@@ -270,6 +282,10 @@ class Ship {
     if (this.speedBoost > 0) {
       this.speedBoost -= dt;
       if (this.speedBoost < 0) this.speedBoost = 0;
+    }
+    if (this.tripleShot > 0) {
+      this.tripleShot -= dt;
+      if (this.tripleShot < 0) this.tripleShot = 0;
     }
 
     if (keys['ArrowLeft'])  this.angle -= ROT * dt;
@@ -294,6 +310,16 @@ class Ship {
     const NOSE = 21;
     const ox = this.x + Math.cos(this.angle) * NOSE;
     const oy = this.y + Math.sin(this.angle) * NOSE;
+    if (this.tripleShot > 0) {
+      const perp = this.angle + Math.PI / 2;
+      const dx = Math.cos(perp) * 8;
+      const dy = Math.sin(perp) * 8;
+      return [
+        new Bullet(ox + dx, oy + dy, this.angle),
+        new Bullet(ox, oy, this.angle),
+        new Bullet(ox - dx, oy - dy, this.angle),
+      ];
+    }
     return [new Bullet(ox, oy, this.angle)];
   }
 
@@ -305,7 +331,7 @@ class Ship {
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
-    ctx.strokeStyle = this.speedBoost > 0 ? '#0ff' : '#fff';
+    ctx.strokeStyle = this.tripleShot > 0 ? '#f0f' : (this.speedBoost > 0 ? '#0ff' : '#fff');
     ctx.lineWidth   = 1.5;
     ctx.lineJoin    = 'round';
 
@@ -487,7 +513,7 @@ function update(dt) {
         score += a.points ?? POINTS[a.size];
         explode(a.x, a.y, a.size * 5);
         if (Math.random() < POWERUP_DROP_CHANCE && powerups.length < 2) {
-          powerups.push(new PowerUp(a.x, a.y));
+          powerups.push(new PowerUp(a.x, a.y, Math.random() < 0.5 ? 'velocidad' : 'triple'));
         }
         newAsteroids.push(...a.split());
       }
@@ -510,7 +536,8 @@ function update(dt) {
   for (const p of powerups) {
     if (!p.dead && dist(ship, p) < ship.radius + p.radius) {
       p.dead = true;
-      ship.speedBoost = 5;
+      if (p.type === 'triple') ship.tripleShot = 5;
+      else ship.speedBoost = 5;
       explode(ship.x, ship.y, 6);
     }
   }
@@ -547,9 +574,16 @@ function drawHUD() {
   ctx.textAlign = 'center';
   ctx.fillText(`NIVEL ${level}`, W / 2, 26);
 
+  let hudY = 46;
   if (ship.speedBoost > 0) {
     ctx.fillStyle = '#0ff';
-    ctx.fillText(`VELOCIDAD ${ship.speedBoost.toFixed(1)}s`, W / 2, 46);
+    ctx.fillText(`VELOCIDAD ${ship.speedBoost.toFixed(1)}s`, W / 2, hudY);
+    ctx.fillStyle = '#fff';
+    hudY += 20;
+  }
+  if (ship.tripleShot > 0) {
+    ctx.fillStyle = '#f0f';
+    ctx.fillText(`TRIPLE ${ship.tripleShot.toFixed(1)}s`, W / 2, hudY);
     ctx.fillStyle = '#fff';
   }
 
