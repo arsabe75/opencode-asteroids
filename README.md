@@ -48,3 +48,4 @@ En el menú de inicio usa `←` `→` para elegir la apariencia de la nave y `Es
 - Partículas de explosión al destruir asteroides
 - Power-up "Velocidad": al recogerlo, la nave se mueve el doble de rápido durante 5 segundos
 - Sistema de skins: 5 apariencias para la nave, seleccionables desde el menú de inicio o con la tecla `K` en partida (se recuerda en `localStorage`)
+- Power-up "Escudo": al recogerlo, una burbuja protectora destruye los asteroides al contacto durante 5 segundos
