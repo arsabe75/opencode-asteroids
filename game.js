@@ -73,6 +73,16 @@ const SKINS = [
     puntos: [[21, 0], [-11, -8], [-6, 0], [-11, 8]],
     extra: [[[13, 0], [-3, 0]]],
   },
+  {
+    id: 'morada',
+    nombre: 'MORADA',
+    color: '#9b30ff',
+    llama: 'rgba(200, 90, 255, 0.85)',
+    escape: [-7, 0],
+    puntos: [[20, 0], [-12, -9], [-7, 0], [-12, 9]],
+    scale: 2,
+    scoreMult: 2,
+  },
 ];
 
 function loadSkinIndex() {
@@ -368,6 +378,7 @@ class Ship {
 
   update(dt) {
     if (this.dead) return;
+    this.radius = 12 * (currentSkin().scale || 1);
     if (this.invincible    > 0) this.invincible    -= dt;
     if (this.shootCooldown > 0) this.shootCooldown -= dt;
 
@@ -407,7 +418,7 @@ class Ship {
   tryShoot() {
     if (this.shootCooldown > 0 || this.dead) return [];
     this.shootCooldown = 0.2;
-    const NOSE = 21;
+    const NOSE = 21 * (currentSkin().scale || 1);
     const ox = this.x + Math.cos(this.angle) * NOSE;
     const oy = this.y + Math.sin(this.angle) * NOSE;
     if (this.tripleShot > 0) {
@@ -429,6 +440,7 @@ class Ship {
     if (this.invincible > 0 && Math.floor(this.invincible * 8) % 2 === 0) return;
 
     const skin = currentSkin();
+    const scale = skin.scale || 1;
     ctx.save();
     ctx.translate(this.x, this.y);
     ctx.rotate(this.angle);
@@ -437,11 +449,11 @@ class Ship {
     ctx.lineJoin    = 'round';
 
     // Silueta de la skin actual
-    traceShipPath(ctx, skin.puntos);
+    traceShipPath(ctx, skin.puntos, scale);
     ctx.stroke();
 
     // Detalles adicionales (líneas decorativas)
-    drawSkinExtras(ctx, skin);
+    drawSkinExtras(ctx, skin, scale);
     ctx.stroke();
 
     // Escudo
@@ -449,7 +461,7 @@ class Ship {
       const blink = this.shield < 2 ? Math.floor(this.shield * 6) % 2 === 0 : true;
       if (blink) {
         const alpha = this.shield < 2 ? (this.shield / 2) : 1;
-        const r = 24 + Math.sin(Date.now() / 120) * 2;
+        const r = (24 + Math.sin(Date.now() / 120) * 2) * scale;
         ctx.strokeStyle = `rgba(85, 255, 136, ${(alpha * 0.85).toFixed(2)})`;
         ctx.lineWidth = 2;
         ctx.beginPath();
@@ -464,7 +476,7 @@ class Ship {
 
     // Llama del propulsor
     if (this.thrusting && Math.random() > 0.35) {
-      const [ex, ey] = skin.escape;
+      const [ex, ey] = skin.escape.map(c => c * scale);
       ctx.beginPath();
       ctx.moveTo(ex, ey - 4);
       const flameMin = this.speedBoost > 0 ? 12 : 6;
@@ -659,7 +671,7 @@ function update(dt) {
       if (!a.dead && !b.dead && dist(b, a) < a.radius) {
         b.dead = true;
         a.dead = true;
-        score += a.points ?? POINTS[a.size];
+        score += (a.points ?? POINTS[a.size]) * (currentSkin().scoreMult || 1);
         explode(a.x, a.y, a.size * 5);
         if (Math.random() < POWERUP_DROP_CHANCE && powerups.length < 2) {
           const r = Math.random();
@@ -675,8 +687,9 @@ function update(dt) {
 
   // Escudo vs asteroide
   if (ship.shield > 0) {
+    const shieldRadius = 24 * (currentSkin().scale || 1);
     for (const a of asteroids) {
-      if (!a.dead && dist(ship, a) < ship.radius + 24 + a.radius * 0.82) {
+      if (!a.dead && dist(ship, a) < ship.radius + shieldRadius + a.radius * 0.82) {
         a.dead = true;
         explode(a.x, a.y, a.size * 5);
       }
@@ -711,15 +724,16 @@ function update(dt) {
 // ── Draw ──────────────────────────────────────────────────────────────────────
 function drawLifeIcon(x, y) {
   const skin = currentSkin();
+  const scale = 0.55 * (skin.scale || 1);
   ctx.save();
   ctx.translate(x, y);
   ctx.rotate(-Math.PI / 2);
   ctx.strokeStyle = skin.color;
   ctx.lineWidth   = 1.2;
   ctx.lineJoin    = 'round';
-  traceShipPath(ctx, skin.puntos, 0.55);
+  traceShipPath(ctx, skin.puntos, scale);
   ctx.stroke();
-  drawSkinExtras(ctx, skin, 0.55);
+  drawSkinExtras(ctx, skin, scale);
   ctx.stroke();
   ctx.restore();
 }
