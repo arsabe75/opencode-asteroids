@@ -1,0 +1,47 @@
+name: issue-triage
+
+on:
+  issues:
+    types: [opened]
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Triage new issue
+        uses: anomalyco/opencode/github@latest
+        env:
+          OPENCODE_API_KEY: ${{ secrets.OPENCODE_API_KEY }}
+        with:
+          model: opencode-go/kimi-k2.7-code
+          prompt: |
+            Se acaba de abrir un issue en este repositorio. Formatéalo y enriquécelo:
+
+            1. Lee el cuerpo del issue y clasifícalo (bug, enhancement, documentation,
+               question, etc.). Aplica los labels existentes que correspondan
+               (solo labels que ya existan en el repositorio).
+            2. Reescribe el cuerpo del issue con esta estructura:
+               - Un resumen estructurado arriba: tipo de issue, descripción breve,
+                 comportamiento esperado vs. actual (si aplica).
+               - Al final, el texto ORIGINAL del autor, íntegro y sin modificar,
+                 dentro de una sección colapsada:
+                 <details>
+                 <summary>Contenido original</summary>
+
+                 (texto original tal cual)
+
+                 </details>
+            3. Reglas estrictas:
+               - El texto original se conserva VERBATIM dentro del <details>.
+               - No inventes información; el resumen solo organiza lo que el autor escribió.
+               - Escribe en el mismo idioma del issue.
+               - No comentes en el issue ni modifiques código.
